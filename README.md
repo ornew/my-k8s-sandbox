@@ -42,12 +42,10 @@ kubectl apply -k ops/infra/tekton-pipelines
 ## Istio
 
 ```
+kubectl apply -k ops/infra/monitoring
+```
+
+```
 make ops/infra/istio-system/istio-system.yaml
 kubectl apply -k ops/infra/istio-system
-```
-
-## Prometheus
-
-```
-kubectl apply -k ops/infra/monitoring
 ```
