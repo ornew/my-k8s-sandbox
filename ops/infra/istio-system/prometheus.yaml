@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: istio-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+  namespace: istio-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: monitoring-kube-prometheus-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: istio-system
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: prometheus
+  namespace: istio-system
+spec:
+  replicas: 1
+  serviceAccountName: prometheus
+  serviceMonitorSelector:
+    matchLabels:
+      prometheus: istio
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: istio-controlplane
+  namespace: istio-system
+  labels:
+    prometheus: istio
+spec:
+  jobLabel: istio
+  selector:
+    matchExpressions:
+      - key: istio
+        operator: In
+        values: [mixer,pilot,galley,citadel,sidecar-injector]
+  namespaceSelector:
+    any: true
+  endpoints:
+    - port: http-monitoring
+      interval: 15s
+    - port: http-policy-monitoring
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: istio-dataplane
+  namespace: istio-system
+  labels:
+    prometheus: istio
+spec:
+  jobLabel: envoy-stats
+  selector:
+    matchExpressions:
+      - key: istio-prometheus-ignore
+        operator: DoesNotExist
+  namespaceSelector:
+    any: true
+  endpoints:
+    - path: /stats/prometheus
+      targetPort: http-envoy-prom
+      interval: 15s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_container_port_name]
+          action: keep
+          regex: '.*-envoy-prom'
+        - action: labelmap
+          regex: "__meta_kubernetes_pod_label_(.+)"
+        - sourceLabels: [__meta_kubernetes_namespace]
+          action: replace
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          action: replace
+          targetLabel: pod_name

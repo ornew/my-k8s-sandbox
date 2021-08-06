@@ -1,0 +1,40 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: istio-1-10-2
+  namespace: istio-system
+spec:
+  #revision: 1-10-2
+  profile: minimal
+  tag: 1.10.2
+  namespace: istio-system
+  defaultRevision: true
+  meshConfig:
+    enableAutoMtls: false
+    accessLogEncoding: JSON
+    accessLogFile: /dev/stdout
+  components:
+    base:
+      k8s:
+        overlays:
+          # https://discuss.istio.io/t/istio-v1-8-1-how-to-enable-validatingwebhooks-failurepolicy-to-fail/9451/2
+          #- kind: ValidatingWebhookConfiguration
+          #  name: istiod-istio-system
+          #  patches:
+          #    - path: webhooks.[name:validation\.istio\.io].clientConfig.service.name
+          #      value: istiod-1-10-2
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        k8s:
+          overlays:
+            - apiVersion: v1
+              kind: Service
+              name: istio-ingressgateway
+              patches:
+                - path: spec.type
+                  value: NodePort
+                - path: spec.ports.[name:http2].nodePort
+                  value: 30080
+                - path: spec.ports.[name:https].nodePort
+                  value: 30443

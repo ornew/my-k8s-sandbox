@@ -1,0 +1,86 @@
+apiVersion: source.toolkit.fluxcd.io/v1beta1
+kind: HelmRepository
+metadata:
+  name: kiali
+  namespace: flux-system
+spec:
+  url: https://kiali.org/helm-charts
+  interval: 24h
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: kiali-server
+  namespace: flux-system
+spec:
+  interval: 24h
+  chart:
+    spec:
+      chart: kiali-server
+      sourceRef:
+        kind: HelmRepository
+        name: kiali
+        namespace: flux-system
+      interval: 24h
+  targetNamespace: istio-system
+  values:
+    kiali_route_url: ""
+    istio_namespace: "" # default is where Kiali is installed
+    auth:
+      openid: {}
+      openshift: {}
+      strategy: anonymous
+    deployment:
+      accessible_namespaces:
+        - "**"
+      additional_service_yaml: {}
+      affinity:
+        node: {}
+        pod: {}
+        pod_anti: {}
+      hpa:
+        api_version: autoscaling/v2beta2
+        spec: {}
+      image_name: quay.io/kiali/kiali
+      image_pull_policy: Always
+      image_pull_secrets: []
+      #image_version: ${HELM_IMAGE_TAG}
+      ingress_enabled: false
+      instance_name: kiali
+      logger:
+        log_format: json
+        log_level: info
+        time_field_format: 2006-01-02T15:04:05Z07:00
+        sampler_rate: "1"
+      node_selector: {}
+      override_ingress_yaml:
+        metadata: {}
+      pod_annotations: {}
+      pod_labels: {}
+      priority_class_name: ""
+      replicas: 1
+      resources: {}
+      secret_name: kiali
+      service_annotations: {}
+      service_type: ""
+      tolerations: []
+      #version_label: ${HELM_IMAGE_TAG}
+      view_only_mode: false
+    external_services:
+      custom_dashboards:
+        enabled: true
+        prometheus:
+          url: http://prometheus-operated.istio-system.svc.cluster.local:9090
+        namespace_label: kubernetes_namespace
+      prometheus:
+        url: http://prometheus-operated.istio-system.svc.cluster.local:9090
+    identity: {}
+      #cert_file:
+      #private_key_file:
+    login_token:
+      signing_key: ""
+    server:
+      port: 20001
+      metrics_enabled: true
+      metrics_port: 9090
+      web_root: ""
