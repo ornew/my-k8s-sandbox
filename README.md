@@ -49,3 +49,19 @@ kubectl apply -k ops/infra/monitoring
 make ops/infra/istio-system/istio-system.yaml
 kubectl apply -k ops/infra/istio-system
 ```
+
+## Kiali & Tekton Dashboard
+
+```
+kubectl apply -k ops/infra/web
+```
+
+`/etc/hosts`:
+
+```
+127.0.0.1 kiali.kind.io
+127.0.0.1 tekton.kind.io
+```
+
+- http://kiali.kind.io:30080
+- http://tekton.kind.io:30080
