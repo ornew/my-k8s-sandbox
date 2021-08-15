@@ -6,7 +6,7 @@ metadata:
 spec:
   #revision: 1-10-2
   profile: minimal
-  tag: 1.10.2
+  tag: 1.11.0
   namespace: istio-system
   defaultRevision: true
   meshConfig:
