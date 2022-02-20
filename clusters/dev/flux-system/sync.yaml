@@ -16,27 +16,13 @@
 #apiVersion: kustomize.toolkit.fluxcd.io/v1beta1
 #kind: Kustomization
 #metadata:
-#  name: flux-system
+#  name: dev
 #  namespace: flux-system
 #spec:
 #  interval: 10m
 #  sourceRef:
 #    kind: GitRepository
 #    name: k8s-sandbox
-#  path: ./ops/infra/flux-system
-#  prune: true
-#  validation: client
-#---
-#apiVersion: kustomize.toolkit.fluxcd.io/v1beta1
-#kind: Kustomization
-#metadata:
-#  name: istio-system
-#  namespace: flux-system
-#spec:
-#  interval: 10m
-#  sourceRef:
-#    kind: GitRepository
-#    name: k8s-sandbox
-#  path: ./ops/infra/istio-system
+#  path: clusters/dev
 #  prune: true
 #  validation: client

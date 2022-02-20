@@ -2,7 +2,7 @@ apiVersion: source.toolkit.fluxcd.io/v1beta1
 kind: HelmRepository
 metadata:
   name: kiali
-  namespace: flux-system
+  namespace: istio-system
 spec:
   url: https://kiali.org/helm-charts
   interval: 24h
@@ -11,7 +11,7 @@ apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
   name: kiali-server
-  namespace: flux-system
+  namespace: istio-system
 spec:
   interval: 24h
   chart:
@@ -20,7 +20,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: kiali
-        namespace: flux-system
+        namespace: istio-system
       interval: 24h
   targetNamespace: istio-system
   values:

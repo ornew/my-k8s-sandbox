@@ -1,0 +1,100 @@
+apiVersion: source.toolkit.fluxcd.io/v1beta1
+kind: HelmRepository
+metadata:
+  name: jupyterhub
+  namespace: istio-sandbox
+spec:
+  interval: 1h0s
+  timeout: 1m0s
+  url: https://jupyterhub.github.io/helm-chart/
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: jupyterhub
+  namespace: istio-sandbox
+spec:
+  chart:
+    spec:
+      chart: jupyterhub
+      sourceRef:
+        kind: HelmRepository
+        name: jupyterhub
+        namespace: istio-sandbox
+      version: 1.0.1
+  interval: 1m0s
+  timeout: 60s
+  targetNamespace: istio-sandbox
+  values:
+    hub:
+      networkPolicy:
+        enabled: false
+      baseUrl: /
+      config:
+        JupyterHub:
+          admin_access: false
+          #authenticator_class: generic-oauth
+          #base_url: /jupyter # not work, use hub.baseUrl of the chart values
+          cleanup_servers: false
+        ConfigurableHTTPProxy:
+          should_start: false
+          #auth_token: bnZsR2tEQmVveGtKNFNjZmxwb043QjFGVnU2dWJoT0NadVRaRU1SMnoyU0tpc0phTTdRWmtlZjFQZExkUWlWNQ==
+        GenericOAuthenticator:
+          login_service: Google
+          client_id: jupyterhub
+          client_secret: ebc5730e-160f-4a98-bbaf-42d6c669b553
+          oauth_callback_url: http://localhost:8081/hub/oauth_callback
+          authorize_url: http://auth.example.com/auth/realms/test/protocol/openid-connect/auth
+          token_url: http://identity-keycloak-http.identity.svc.cluster.local/auth/realms/test/protocol/openid-connect/token
+          userdata_url: http://identity-keycloak-http.identity.svc.cluster.local/auth/realms/test/protocol/openid-connect/userinfo
+          userdata_token_method: url
+          username_key: preferred_username
+          tls_verify: false
+          userdata_params:
+            state: state
+      extraConfig:
+        20-logging: |
+          from tornado.log import app_log
+          from oauthenticator.generic import GenericOAuthenticator
+          class CustomAurhenticator(GenericOAuthenticator):
+            def _get_user_data(self, token_response):
+              app_log.info(token_response)
+              return super()._get_user_data(token_response)
+          #c.JupyterHub.authenticator_class = CustomAurhenticator
+        30-proxy: |
+          from kubespawner.proxy import KubeIngressProxy
+          c.JupyterHub.proxy_class = KubeIngressProxy
+          c.KubeIngressProxy.should_start = False
+          from jupyterhub.proxy import Proxy
+
+          class MyProxy(Proxy):
+    proxy:
+      chp:
+        networkPolicy:
+          enabled: false
+      service:
+        type: ClusterIP
+    prePuller:
+      continuous:
+        enabled: false
+      hook:
+        enabled: false
+      pullProfileListImages: false
+  postRenderers:
+    - kustomize:
+        patchesStrategicMerge:
+          - $patch: delete
+            apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: proxy
+        #- $patch: delete
+        #  apiVersion: v1
+        #  kind: Service
+        #  metadata:
+        #    name: proxy-api
+        #- $patch: delete
+        #  apiVersion: v1
+        #  kind: Service
+        #  metadata:
+        #    name: proxy-public

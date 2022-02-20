@@ -2,7 +2,7 @@ apiVersion: source.toolkit.fluxcd.io/v1beta1
 kind: HelmRepository
 metadata:
   name: harbor
-  namespace: flux-system
+  namespace: kube-system
 spec:
   url: https://helm.goharbor.io
   interval: 24h
@@ -11,7 +11,7 @@ apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
   name: harbor
-  namespace: flux-system
+  namespace: kube-system
 spec:
   interval: 24h
   chart:
@@ -20,7 +20,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: harbor
-        namespace: flux-system
+        namespace: kube-system
       interval: 24h
   targetNamespace: kube-system
   values:

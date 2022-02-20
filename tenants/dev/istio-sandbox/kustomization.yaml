@@ -1,0 +1,7 @@
+namespace: istio-sandbox
+resources:
+  - ./namespace.yaml
+  - ./bookinfo.yaml
+  - ./jupyterhub.yaml
+  #- ./jupyterhub-istio-proxy.yaml
+  - ./istio.yaml

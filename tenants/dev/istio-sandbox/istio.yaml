@@ -1,0 +1,324 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-sandbox
+  labels:
+    istio-injection: enabled
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-api
+  namespace: istio-sandbox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-api
+  template:
+    metadata:
+      labels:
+        app: my-api
+    spec:
+      containers:
+        - name: grpc
+          image: docker.io/ornew/grpc-hello-world
+          ports:
+            - containerPort: 8081
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-api
+  namespace: istio-sandbox
+  labels:
+    app: my-api
+spec:
+  selector:
+    app: my-api
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 8081
+      targetPort: 8081
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: my-api
+  namespace: istio-sandbox
+spec:
+  hosts:
+    - istio.kind.io
+  gateways:
+    - istio-sandbox/istio-gateway
+  http:
+    - name: api
+      route:
+        - destination:
+            host: my-api.istio-sandbox.svc.cluster.local
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: istio-gateway
+  namespace: istio-sandbox
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rls
+  namespace: istio-sandbox
+data:
+  config.yaml: |
+    domain: ratelimit
+    descriptors:
+      - key: PATH
+        value: /Greeter/SayHello
+        rate_limit:
+          unit: second
+          requests_per_unit: 100
+      - key: PATH
+        rate_limit:
+          unit: second
+          requests_per_unit: 100000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rls
+  namespace: istio-sandbox
+  labels:
+    app: rls
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rls
+  template:
+    metadata:
+      labels:
+        app: rls
+    spec:
+      volumes:
+        - name: config
+          configMap:
+            name: rls
+            defaultMode: 420
+      containers:
+        - name: redis
+          image: docker.io/redis:6.2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: redis
+              containerPort: 6379
+        - name: ratelimit
+          image: envoyproxy/ratelimit:v1.1.0  # https://github.com/envoyproxy/ratelimit#api-deprecation-history
+          imagePullPolicy: Always
+          command:
+            - /bin/ratelimit
+          env:
+            - name: REDIS_SOCKET_TYPE
+              value: tcp
+            - name: REDIS_URL
+              value: localhost:6379
+            - name: RUNTIME_ROOT
+              value: /srv
+            - name: RUNTIME_SUBDIRECTORY
+              value: rls
+            - name: RUNTIME_IGNOREDOTFILES
+              value: "true"
+            - name: RUNTIME_WATCH_ROOT
+              value: "false"
+            - name: USE_STATSD
+              value: "false"
+            - name: LOG_LEVEL
+              value: DEBUG
+          ports:
+            - containerPort: 8080
+            - containerPort: 8081
+            - containerPort: 6070
+          volumeMounts:
+            - mountPath: /srv/rls/config
+              name: config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rls
+  namespace: istio-sandbox
+  labels:
+    app: rls
+spec:
+  selector:
+    app: rls
+  ports:
+    - name: http-rls
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+    - name: grpc-rls
+      protocol: TCP
+      port: 8081
+      targetPort: 8081
+    - name: http-debug
+      protocol: TCP
+      port: 6070
+      targetPort: 6070
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: filter-rls
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      istio: ingressgateway
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+              subFilter:
+                name: "envoy.filters.http.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.ratelimit
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimit
+            domain: ratelimit
+            failure_mode_deny: true
+            rate_limit_service:
+              grpc_service:
+                envoy_grpc:
+                  cluster_name: rate_limit_cluster
+                timeout: 10s
+              transport_api_version: V3
+    - applyTo: CLUSTER
+      match:
+        cluster:
+          service: rls.istio-sandbox.svc.cluster.local
+      patch:
+        operation: ADD
+        value:
+          name: rate_limit_cluster
+          type: STRICT_DNS
+          connect_timeout: 10s
+          lb_policy: ROUND_ROBIN
+          http2_protocol_options: {}  # enable HTTP2
+          load_assignment:
+            cluster_name: rate_limit_cluster
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: rls.istio-sandbox.svc.cluster.local
+                          port_value: 8081
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: filter-rls-svc
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      istio: ingressgateway
+  configPatches:
+    - applyTo: VIRTUAL_HOST
+      match:
+        context: GATEWAY
+        routeConfiguration:
+          vhost:
+            # https://github.com/istio/istio/issues/32381#issuecomment-861463477
+            # https://github.com/istio/istio/pull/33690
+            #name: '*'
+            #name: istio.kind.io:30080
+            route:
+              action: ANY
+      patch:
+        operation: MERGE
+        value:
+          rate_limits:
+            - actions: # any actions in here
+                - request_headers:
+                    header_name: ":path"
+                    descriptor_key: "PATH"
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: filter-local-rls-svc
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      app: productpage
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.local_ratelimit
+          typed_config:
+            "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+            type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+            value:
+              stat_prefix: http_local_rate_limiter
+    - applyTo: HTTP_ROUTE
+      match:
+        context: SIDECAR_INBOUND
+        routeConfiguration:
+          vhost:
+            name: "inbound|8081||"
+            route:
+              action: ANY
+      patch:
+        operation: MERGE
+        value:
+          typed_per_filter_config:
+            envoy.filters.http.local_ratelimit:
+              "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+              type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+              value:
+                stat_prefix: http_local_rate_limiter
+                token_bucket:
+                  max_tokens: 10
+                  tokens_per_fill: 10
+                  fill_interval: 60s
+                filter_enabled:
+                  runtime_key: local_rate_limit_enabled
+                  default_value:
+                    numerator: 100
+                    denominator: HUNDRED
+                filter_enforced:
+                  runtime_key: local_rate_limit_enforced
+                  default_value:
+                    numerator: 100
+                    denominator: HUNDRED
+                response_headers_to_add:
+                  - append: false
+                    header:
+                      key: x-local-rate-limit
+                      value: 'true'
