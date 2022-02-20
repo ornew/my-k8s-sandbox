@@ -7,18 +7,12 @@ Each component can be installed individually.
 However, most manifests use HelmRelease and Kustomization,
 so Flux must be installed at a minimum.
 
-## Flux
-
-```
-make ops/infra/flux-system/flux-system.yaml
-kubectl apply -k ops/infra/flux-system
-```
-
 ## Local Registry
 
 https://kind.sigs.k8s.io/docs/user/local-registry/
 
 ```
+cd infra/kind
 make registry/up
 make kind/registry/apply
 ```
@@ -32,36 +26,3 @@ docker push localhost:5000/hello-app:1.0
 kubectl create deployment hello-server --image=localhost:5000/hello-app:1.0
 kubectl logs deploy/hello-server
 ```
-
-## Tekton
-
-```
-kubectl apply -k ops/infra/tekton-pipelines
-```
-
-## Istio
-
-```
-kubectl apply -k ops/infra/monitoring
-```
-
-```
-make ops/infra/istio-system/istio-system.yaml
-kubectl apply -k ops/infra/istio-system
-```
-
-## Kiali & Tekton Dashboard
-
-```
-kubectl apply -k ops/infra/web
-```
-
-`/etc/hosts`:
-
-```
-127.0.0.1 kiali.kind.io
-127.0.0.1 tekton.kind.io
-```
-
-- http://kiali.kind.io:30080
-- http://tekton.kind.io:30080
