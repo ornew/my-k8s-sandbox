@@ -1,0 +1,64 @@
+apiVersion: source.toolkit.fluxcd.io/v1beta1
+kind: HelmRepository
+metadata:
+  name: istio
+  namespace: istio-system
+spec:
+  url: https://istio-release.storage.googleapis.com/charts
+  interval: 24h
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: istio-base
+  namespace: istio-system
+spec:
+  interval: 24h
+  chart:
+    spec:
+      chart: base
+      sourceRef:
+        kind: HelmRepository
+        name: istio
+        namespace: istio-system
+      interval: 24h
+  targetNamespace: istio-system
+  values:
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: istiod
+  namespace: istio-system
+spec:
+  interval: 24h
+  chart:
+    spec:
+      chart: istiod
+      sourceRef:
+        kind: HelmRepository
+        name: istio
+        namespace: istio-system
+      interval: 24h
+  targetNamespace: istio-system
+  dependsOn:
+    - name: istio-base
+  values:
+    # https://github.com/istio/istio/blob/master/manifests/charts/istio-control/istio-discovery/values.yaml
+    revision: r1
+    revisionTags:
+      - default
+    pilot:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+    global:
+      proxy:
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi

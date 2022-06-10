@@ -1,0 +1,22 @@
+namespace: flux-system
+resources:
+  - namespace.yaml
+  - https://github.com/fluxcd/flux2//manifests/bases/source-controller?ref=v0.31.1
+  - https://github.com/fluxcd/flux2//manifests/bases/kustomize-controller?ref=v0.31.1
+  - https://github.com/fluxcd/flux2//manifests/bases/notification-controller?ref=v0.31.1
+  - https://github.com/fluxcd/flux2//manifests/bases/helm-controller?ref=v0.31.1
+  #- https://github.com/fluxcd/flux2//manifests/bases/image-reflector-controller?ref=v0.31.1
+  #- https://github.com/fluxcd/flux2//manifests/bases/image-automation-controller?ref=v0.31.1
+  - https://github.com/fluxcd/flux2//manifests/rbac?ref=v0.31.1
+  - https://github.com/fluxcd/flux2//manifests/policies?ref=v0.31.1
+transformers:
+  - labels.yaml
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value: {}
